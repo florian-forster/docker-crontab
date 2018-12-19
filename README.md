@@ -26,10 +26,10 @@ Add a label `cron.enabled=true` to a container to make it visible for the cron.
 
 Then, add the following lavels to define cron jobs:
 
-`cron.<jobname>.name`: The display name of the cron job in the cron logs
-`cron.<jobname>.schedule`: The cron schedule, defining how often the job will be executed
-`cron.<jobname>.command`: Comnmand(s) to be executed in the container. The commands get executed inside of the cron container in a bash. You can also run docker commands that will be executed in the context of the host, because the docker socket is mapped as volume.
-`cron.<jobname>.name`: The display name of the cron job in the cron logs
+- `cron.<jobname>.name`: The display name of the cron job in the cron logs
+- `cron.<jobname>.schedule`: The cron schedule, defining how often the job will be executed
+- `cron.<jobname>.command`: Comnmand(s) to be executed in the container. The commands get executed inside of the cron container in a bash.  You can also run docker commands that will be executed in the context of the host, because the docker socket is mapped as volume.
+- `cron.<jobname>.name`: The display name of the cron job in the cron logs
 
 You can assign several jobs to one container. You cannot have the same jobname twice on the same container. However, you can have the same jobname on different containers. The jobs will get the container name assigned by the script to avoid ambiguity in this case.
 
