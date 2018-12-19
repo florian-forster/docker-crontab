@@ -142,7 +142,11 @@ parse_schedule() {
 }
 
 function build_crontab() {
+
+    source /create-cron-config-from-docker
+
     rm -rf ${CRONTAB_FILE}
+    touch ${CRONTAB_FILE}
 
     ONSTART=()
     while read i ; do
@@ -162,6 +166,8 @@ function build_crontab() {
         COMMENT=$(jq -r .[$i].comment ${CONFIG})
         if [ "${COMMENT}" != "null" ]; then
             echo "# ${COMMENT}" >> ${CRONTAB_FILE}
+        else
+            COMMENT="";
         fi
 
         SCRIPT_NAME=$(jq -r .[$i].name ${CONFIG})
@@ -212,20 +218,30 @@ EOF
     echo "##### crontab generation complete #####"
     cat ${CRONTAB_FILE}
 
-    echo "##### run commands with onstart #####"
-    for COMMAND in "${ONSTART[@]}"; do
-        echo "${COMMAND}"
-        ${COMMAND} &
-    done
+
+    if [ -z "$STARTED" ]; then
+        echo "##### run commands with onstart #####"
+        for COMMAND in "${ONSTART[@]}"; do
+            echo "${COMMAND}"
+            ${COMMAND} &
+        done
+        STARTED=true
+    fi
 }
 
 if [ "$1" = "crond" ]; then
-    if [ -f ${CONFIG} ]; then
-        build_crontab
-    else
-        echo "Unable to find ${HOME_DIR}/config.json"
-    fi
+  build_crontab
 fi
+
+function docker_event_loop () {
+  while read line; do
+    build_crontab
+  done
+}
+
+
+# run docker event loop, reload config if container containers were added or removed
+(docker events --filter event=start --filter event=destroy --filter event=oom --filter event=kill --filter event=stop | docker_event_loop) &
 
 echo "$@"
 exec "$@"

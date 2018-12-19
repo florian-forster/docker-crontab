@@ -1,0 +1,22 @@
+#!/bin/bash
+
+which docker || exit 1
+
+# We only check containers with label cron.enable=true
+relevant_containers=$(docker ps --format "{{.Names}}" --filter "label=cron.enable=true")
+
+# Create the cron json config for the containers, basically mapping the keys from the labels to the config file
+if [ -n "$relevant_containers" ]; then
+    echo "Updating config from docker cron labels."
+    docker inspect $relevant_containers \
+        | jq '[.[] | .Config.Labels | with_entries( select((.key | startswith("cron.") ) ) ) ] ' \
+        | jq 'map(del(."cron.enable"))' \
+        | jq '[.[] | to_entries | map(. + { "job": (.key | split(".")[1])}) | map(. + { "key": (.key | split(".")[2])}) ]' \
+        | jq '[.[] | group_by(.job) | .[] | from_entries ]' > $CONFIG
+else
+    echo "No container running with docker cron labels."
+    echo "" > $CONFIG
+fi
+
+echo "Config $CONFIG:"
+cat $CONFIG

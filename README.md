@@ -1,101 +1,36 @@
 # docker-crontab
 
-A simple wrapper over `docker` to all complex cron job to be run in other containers.
+Fork of the fine [willfarrell/docker-crontab](https://github.com/willfarrell/docker-crontab), which allows executing cron jobs in a dockerized environment.
 
-## Supported tags and Dockerfile links
-
--	[`latest` (*Dockerfile*)](https://github.com/willfarrell/docker-crontab/blob/master/Dockerfile)
-
-[![](https://images.microbadger.com/badges/version/willfarrell/crontab.svg)](http://microbadger.com/images/willfarrell/crontab "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/willfarrell/crontab.svg)](http://microbadger.com/images/willfarrell/crontab "Get your own image badge on microbadger.com")
-
-
-## Why?
-Yes, I'm aware of [mcuadros/ofelia](https://github.com/mcuadros/ofelia) (280MB), it was the main inspiration for this project. 
-A great project, don't get me wrong. It was just missing certain key enterprise features I felt were required to support where docker is heading.
-
-## Features
-- Easy to read schedule syntax allowed.
-- Allows for comments, cause we all need friendly reminders of what `update_script.sh` actually does.
-- Start an image using `image`.
-- Run command in a container using `container`.
-- Run command on a instances of a scaled container using `project`.
-- Ability to trigger scripts in other containers on completion cron job using `trigger`.
-
-## Config.json
-- `name`: Human readable name that will be used as the job filename. Will be converted into a slug. Optional.
-- `comment`: Comments to be included with crontab entry. Optional.
-- `schedule`: Crontab schedule syntax as described in https://en.wikipedia.org/wiki/Cron. Ex `@hourly`, `@every 1h30m`, `* * * * *`. Required.
-- `command`: Command to be run on in crontab container or docker container/image. Required.
-- `image`: Docker images name (ex `library/alpine:3.5`). Optional.
-- `project`: Docker Compose/Swarm project name. Optional, only applies when `contain` is included.
-- `container`: Full container name or container alias if `project` is set. Ignored if `image` is included. Optional.
-- `dockerargs`: Command line docker `run`/`exec` arguments for full control. Defaults to ` `.
-- `trigger`: Array of docker-crontab subset objects. Subset includes: `image`,`project`,`container`,`command`,`dockerargs` 
-- `onstart`: Run the command on `crontab` container start, set to `true`. Optional, defaults to falsey.
-
-See [`config.sample.json`](https://github.com/willfarrell/docker-crontab/blob/master/config.sample.json) for examples.
-
-```json
-[{
- 	"schedule":"@every 5m",
- 	"command":"/usr/sbin/logrotate /etc/logrotate.conf"
- },{
- 	"comment":"Regenerate Certificate then reload nginx",
- 	"schedule":"43 6,18 * * *",
- 	"command":"sh -c 'dehydrated --cron --out /etc/ssl --domain ${LE_DOMAIN} --challenge dns-01 --hook dehydrated-dns'",
- 	"dockerargs":"--env-file /opt/crontab/env/letsencrypt.env -v webapp_nginx_tls_cert:/etc/ssl -v webapp_nginx_acme_challenge:/var/www/.well-known/acme-challenge",
- 	"image":"willfarrell/letsencrypt",
- 	"trigger":[{
- 		"command":"sh -c '/etc/scripts/make_hpkp ${NGINX_DOMAIN} && /usr/sbin/nginx -t && /usr/sbin/nginx -s reload'",
- 		"project":"conduit",
- 		"container":"nginx"
- 	}],
- 	"onstart":true
- }]
-```
+The added value of this fork is that it retrieves the configuration dynamically from docker container labels, so there is no need to maintain a dedicated config file.
 
 ## How to use
 
-### Command Line
-```bash
-docker build -t crontab .
-docker run -d \
-    -v /var/run/docker.sock:/var/run/docker.sock:ro \
-    -v ./env:/opt/env:ro \
-    -v /path/to/config/dir:/opt/crontab:rw \
-    -v /path/to/logs:/var/log/crontab:rw \
-    crontab
+Build the container from scratch (no public docker image available yet)
+
+```
+# clone the github project, then execute from within the project root directory:
+docker build -t florianforster/docker-crontab .
 ```
 
-### Dockerfile
-```Dockerfile
-FROM willfarrell/crontab
+Start the cron container
 
-COPY config.json ${HOME_DIR}/
+```
+docker run --rm --name=cron -v /var/run/docker.sock:/var/run/docker.sock:ro florianforster/docker-crontab
 
 ```
 
-### Logrotate Dockerfile
-```Dockerfile
-FROM willfarrell/crontab
+While running, the cron container will check if there are any containers with cron jobs defined via labels.
 
-RUN apk add --no-cache logrotate
-RUN echo "*/5 *	* * *  /usr/sbin/logrotate /etc/logrotate.conf" >> /etc/crontabs/logrotate
-COPY logrotate.conf /etc/logrotate.conf
+Add a label `cron.enabled=true` to a container to make it visible for the cron.
 
-CMD ["crond", "-f"]
-```
+Then, add the following lavels to define cron jobs:
 
-### Logging - In Dev
-All `stdout` is captured, formatted, and saved to `/var/log/crontab/jobs.log`. Set `LOG_FILE` to `/dev/null` to disable logging.
+`cron.<jobname>.name`: The display name of the cron job in the cron logs
+`cron.<jobname>.schedule`: The cron schedule, defining how often the job will be executed
+`cron.<jobname>.command`: Comnmand(s) to be executed in the container. The commands get executed inside of the cron container in a bash. You can also run docker commands that will be executed in the context of the host, because the docker socket is mapped as volume.
+`cron.<jobname>.name`: The display name of the cron job in the cron logs
 
-example: `e6ced859-1563-493b-b1b1-5a190b29e938 2017-06-18T01:27:10+0000 [info] Start Cronjob **map-a-vol** map a volume`
+You can assign several jobs to one container. You cannot have the same jobname twice on the same container. However, you can have the same jobname on different containers. The jobs will get the container name assigned by the script to avoid ambiguity in this case.
 
-grok: `CRONTABLOG %{DATA:request_id} %{TIMESTAMP_ISO8601:timestamp} \[%{LOGLEVEL:severity}\] %{GREEDYDATA:message}`
-
-
-## TODO
-- [ ] Have ability to auto regenerate crontab on file change (signal HUP?)
-- [ ] Run commands on host machine (w/ --privileged?)
-- [ ] Write tests
-- [ ] Setup TravisCI
+All available configuration options can be found in the parent project https://github.com/willfarrell/docker-crontab. Note that triggers are not supported yet.

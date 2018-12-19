@@ -1,15 +1,33 @@
-version: "2.1"
+version: "3.6"
 
 services:
-  myapp:
-    image: alpine:3.5
-    restart: always
-    command: "sh -c 'while :; do sleep 1; done'"
-
   crontab:
     build: .
     restart: always
     volumes:
-     - "/var/run/docker.sock:/var/run/docker.sock:ro"
-    # - "/usr/bin/docker:/usr/bin/docker:ro"
-     - "/Users/willfarrell/Development/docker/docker-crontab/config.json:/opt/crontab/config.json:rw"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+  myapp_a:
+    image: alpine:3.5
+    restart: always
+    command: "sh -c 'while :; do sleep 1; done'"
+    labels:
+      cron.enable: "true"
+      cron.task1.name: "Task1 - myapp_a"
+      cron.task1.comment: "Gets executed on startup"
+      cron.task1.command: 'export TIMESTAMP=$$(date +"%Y-%m-%d-%H-%M"); echo "task1-myapp_a"; echo $$TIMESTAMP;'
+      cron.task1.schedule: "@every 1m"
+      cron.task1.onstart: "true"
+      cron.task2.name: "Task2"
+      cron.task2.command: "echo task2-myapp_a/"
+      cron.task2.schedule: "@every 1m"
+      cron.task2.onstart: "false"
+  myapp_b:
+    image: alpine:3.5
+    restart: always
+    command: "sh -c 'while :; do sleep 1; done'"
+    labels:
+      cron.enable: "true"
+      cron.task1.name: "Task1"
+      cron.task1.command: "echo task1-myapp_b"
+      cron.task1.schedule: "@every 1m"
+      cron.task1.onstart: "true"
